@@ -18,6 +18,12 @@ class CosineComparison(tf.keras.layers.Layer):
          cosine_distance = tf.divide(x = dot_product_X, y = norm_products)
          return cosine_distance
 
+class EuclideanComparison(tf.keras.layers.Layer):
+     def __init__(self):
+         super(EuclideanComparison, self).__init__()
+
+     pass
+
 # How are we training
 # - how do we pick from here
 #   - loss against matrix (like an image mse) --> but how do we know true values (just 1 for dup
