@@ -5,10 +5,10 @@
 from keras import backend as K
 from keras.layers import Dense, MaxPooling2D, Conv2D, Flatten, Lambda, Input
 from keras.models import Sequential, Model
-
 import numpy as np
-
 import tensorflow as tf
+
+import utils
 
 # ============== CONSTANTS ============== #
 ENCODED_SIZE = 4096
@@ -28,7 +28,7 @@ def traditional_siamese_branch(input_shape):
     #model.add(MaxPooling2D(pool_size=(2,2), strides=None, padding='same', name='siaemese_maxpool3'))
     #model.add(Conv2D(256, (2, 2), activation='relu', padding='same', name="siamese_conv4"))
     model.add(Flatten(), name='siamese_flatten')
-    model.add(Dense(ENCODED_SIZE, activation='sigmoid', name='siamese_branch_dense')) #TODO: Do we need the sigmoid here (or RELU)
+    model.add(Dense(ENCODED_SIZE, activation='sigmoid', name='siamese_branch_dense')) #TODO: RELU or sig.
 
     return model
 
@@ -52,7 +52,7 @@ def multiple_traditional_siamese_nets(roi_feature_shape):
     all_predictions = []
 
     siamese_model = traditional_siamese_branch((w, h, c)) #to ensure weight sharing
-    L1_layer = Lambda(lambda features : K.abs(features[0] - features[1]))
+    L1_layer = Lambda(lambda features : K.abs(features[0] - features[1])) #TODO why use L1
     prediction_layer = Dense(1, activation='sigmoid') #awaiting L1 input
 
     for i in range(t):
@@ -65,6 +65,24 @@ def multiple_traditional_siamese_nets(roi_feature_shape):
 
     multiple_siamese_model = Model(input=inputs, outputs=all_predictions)
     return multiple_siamese_model
+
+def multiple_distance_siamese_nets(roi_feature_shape):
+    t, w, h, c = roi_feature_shape
+    inputs = [Input((w, h, c)) for _ in range(t)]
+    all_distances = []
+
+    siamese_model = traditional_siamese_branch((w, h, c)) #to ensure weight sharing
+    distance = Lambda(utils.euclidean_distance, output_shape=utils.eucl_dist_output_shape)
+
+    for i in range(t):
+        for j in range(i + 1, t):
+            left_features = siamese_model(inputs[i])
+            right_features = siamese_model(inputs[j])
+            embed_distance = distance([left_features, right_features]) #TODO check dimension
+            all_distances.append(embed_distance)
+
+    multiple_distance_siamese_model = Model(input=inputs, output=all_distances)
+    return multiple_distance_siamese_model
 
 # a single roi_feature_shape
 def multiple_two_channel_nets(roi_feature_shape):
@@ -160,7 +178,16 @@ def check_variables():
 #    - Next step would be to see how to combine the loss of this subnetwork to ensure that the
 #      performance on other forgeries doesn't drop and the copy-move forgery detection acc. inc.
 
-# ==== OUR EVALUATION METHODS ====
+# ==== OUR EVALUATION METHODS ==== TODO
+
+# ==== EXPERIMENTS ==== TODO
+# 1. Comparison b/w all methods
+# 2. https://arxiv.org/ftp/arxiv/papers/1604/1604.04573.pdf?
+# Our eventual goal is to be able to use this subsystem system to inform the rest of the system,
+# ie: almost like a proposal system to say that these are the copy-move detections and so it
+# doesn't have to directly identify the correct one but we'd like it to be in the rankings (eg: top 5 ish)
+# We also want some way of seeing how high the probabilities are --> [TODO!!!]
+# perhaps look at the accuracy measure for RPNs  --> Precision and Recall
 
 
 # ==== EXISTING WORK ====
@@ -172,3 +199,5 @@ def check_variables():
 # ==== FUTURE DIRECTION ====
 # 1. Using Cross-Input Neighbourhood Diff.? (as future direction.)
 # 2. Could substitude the decision network as necessary
+# 3. Learning a global metric that compares the similarity by relating more feature maps
+#    (right not we're not enforcing the fact that only one of them should be 1)
